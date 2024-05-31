@@ -17,32 +17,20 @@ wH2oa=[8950,9860]
 wH2ob=[8100,8300]
 c = c/1000
 
-def integraleV(V,raie):
+def integrale(V,raie):
 	Ntemp = np.abs(raie)
-	center = np.argmax(Ntemp)
-	if center > indice_max :
-		isole = Ntemp[center-indice_max:center+indice_max]
-	else : 
-		isole = Ntemp[0:center+indice_max]
+	isole = Ntemp[52:73]
 	I1 = integrate.simpson(isole,dx=Vsteps)
 	return(I1)
 
-def integraleI(V,raie):
-	Ntemp = np.abs(raie)
-	center = np.argmin(Ntemp)
-	if center > indice_max :
-		isole = Ntemp[center-indice_max:center+indice_max]
-	else : 
-		isole = Ntemp[0:center+indice_max]
-	I1 = integrate.simpson(isole,dx=Vsteps)
-	return(I1)
+
 
 #get data from ascii
 data = np.genfromtxt('UMon_2014-04-11-stokesI.ascii')
 
 #observed data
 wavelength = data[:,0]
-intensity = data[:,1]
+intensity = data[:,1] - 1
 sigma=data[:,2]
 
 i=[]
@@ -82,7 +70,7 @@ s=np.array(s)
 
 
 #get mask
-pickle = pickle.load(open('t5000g+3.0.sel_atmo+mol+arbitrarygeff.pickle', 'rb'))
+pickle = pickle.load(open('t5000g+3.0.sel_atmo+mol.pickle', 'rb'))
 
 mask = pickle['wave_vac']
 poids = pickle['depth']
@@ -95,7 +83,6 @@ Nintens=np.zeros((len(V),len(mask)))
 Nintens2=np.zeros((len(V),len(mask)))
 Ns=np.zeros((len(V),len(mask)))
 Ns1=np.zeros((len(V),len(mask)))
-
 
 for k in (range (len(mask))) :
 	wmin= mask[k]*Vmin/c + mask[k]
@@ -110,67 +97,23 @@ for k in (range (len(mask))) :
 		g=interpolate.interp1d(np.squeeze(Vk), np.squeeze(sigm))	
 		
 		y = f(V)
-		Nintens[:,k]=y
-		Nintens2[:,k]=y
-
 		z=g(V)
+		Nintens[:,k]=y
+		
 		Ns[:,k]=1/z
-		Ns1[:,k]=1/z
 	except : 
 		a = np.empty(len(V))
 		a[:]=np.nan
 		Nintens[:,k]=a
-		Nintens2[:,k]=a
 		Ns[:,k]=a
-		Ns1[:,k]=a
 
-		
-				
-	if lande[k]==99 :
-		
-		Nintensk = Nintens[:,k]
-		Nsk = Ns[:,k]
-		
-		Nintenspositif = Nintensk
-		Nintensnegatif = -Nintensk
-		Nspositif = Nsk
-		Nsnegatif = -Nsk
-		Nintenstemp = Nintens[:,0:k+1]
-		Nintenstemp[:,k]=Nintenspositif	
-		Nstemp = Ns[:,0:k+1]
-		Nstemp[:,k]=Nintenspositif	
-		mult=Nstemp*Nintenstemp
-		Somme=np.nansum(mult,axis=1)
-		sommek=np.nansum(Nstemp,axis=1)
-		Wlapositif = Somme/sommek
-		Ipositif = integraleI(V, Wlapositif)
-		
-		
-		Nintenstemp = Nintens[:,0:k+1]
-		Nintenstemp[:,k]=Nintensnegatif	
-		Nstemp = Ns[:,0:k+1]
-		Nstemp[:,k]=Nintensnegatif	
-		mult=Nstemp*Nintenstemp
-		Somme=np.nansum(mult,axis=1)
-		sommek=np.nansum(Nstemp,axis=1)
-		Wlanegatif = Somme/sommek
-		Inegatif = integraleI(V, Wlanegatif)
-		
-		if Ipositif < Inegatif : 
-			Nintens[:,k]=Nintensnegatif
-			Ns[:,k]=Nsnegatif
-		else : 
-			Nintens[:,k]=Nintenspositif
-			Ns[:,k]=Nspositif
-
-Sommeintens = np.nanmean(Nintens2,axis=1)
+Sommeintens = np.nanmean(Nintens,axis=1)
 
 multkkk=Ns*Nintens
 Sommekk=np.nansum(multkkk,axis=1)
 sommekkk=np.nansum(Ns,axis=1)
 
 Wla = Sommekk/sommekkk
-Wla=Wla/2
 ################### Q
 
 
@@ -211,8 +154,10 @@ for k in (range (len(mask))) :
 		z=g(V)
 		NQ[:,k]=y
 		NQ2[:,k]=y
+
 		Ns2[:,k]=1/z
 		Ns3[:,k]=1/z
+
 
 	except : 
 		a = np.empty(len(V))
@@ -240,7 +185,7 @@ for k in (range (len(mask))) :
 		Somme=np.nansum(mult,axis=1)
 		sommek=np.nansum(Ns2temp,axis=1)
 		Wla2positif = Somme/sommek
-		Ipositif = integraleV(V, Wla2positif)
+		Ipositif = integrale(V, Wla2positif)
 		
 		
 		NQtemp = NQ[:,0:k+1]
@@ -251,7 +196,7 @@ for k in (range (len(mask))) :
 		Somme=np.nansum(multkkk,axis=1)
 		sommek=np.nansum(Ns2temp,axis=1)
 		Wla2negatif = Somme/sommek
-		Inegatif = integraleV(V, Wla2negatif)
+		Inegatif = integrale(V, Wla2negatif)
 		
 		if Ipositif < Inegatif : 
 			NQ[:,k]=NQnegatif
@@ -259,19 +204,27 @@ for k in (range (len(mask))) :
 		else : 
 			NQ[:,k]=NQpositif
 			Ns2[:,k]=Ns2positif
-	
+	else : 
+		
+		NQ[:,k] = NQ[:,k]*lande[k]
+		
+Sommelande = np.sum(lande)
+
 Somme2 = np.nanmean(NQ2,axis=1)
+mult3=Ns3*NQ2
+Somme3=np.nansum(mult3,axis=1)
+sommek3=np.nansum(Ns3,axis=1)
+
+Wla_without_lande = Somme3/sommek3
+
+
 mult=Ns3*NQ
 Somme=np.nansum(mult,axis=1)
 sommek=np.nansum(Ns2,axis=1)
 
-Wla2 = Somme/sommek
+Wla_with_lande = Somme/(sommek)
 
-mult=Ns2*NQ
-Somme=np.nansum(mult,axis=1)
-sommek=np.nansum(Ns2,axis=1)
 
-Wla3 = Somme/sommek
 
 ####### Barre d'erreurs
 
@@ -289,22 +242,21 @@ erreur = np.sqrt(np.nansum(We*Se*Se,axis=1)/(np.nansum(We,axis=1)*np.shape(NQ)[1
 
 
 
-fig=plt.figure()
+# fig=plt.figure()
 
-ax1 = plt.subplot(2,1,1)
-ax1.plot(V,Sommeintens+0.1,label='Stokes I SLA',color='forestgreen')
-ax1.plot(V,Wla+0.32,label='Stokes I WLA', color='darkred')
-plt.xlabel('v(km/s)')
-plt.ylabel('I/Ic') 	
-plt.legend()
-plt.grid(True)
+# ax1 = plt.subplot(2,1,1)
+# ax1.plot(V,Sommeintens+1.1,label='Stokes I SLA',color='forestgreen')
+# ax1.plot(V,Wla+1.05,label='Stokes I WLA', color='darkred')
+# plt.xlabel('v(km/s)')
+# plt.ylabel('I/Ic') 	
+# plt.legend()
+# plt.grid(True)
 
 
 
-ax2 = plt.subplot(2,1,2)
-ax2.plot(V,Somme2,label='Stokes V SLA',color='forestgreen')
-ax2.plot(V,Wla2,label='Stokes V WLA erreur positive', color='darkred')
-ax2.plot(V,Wla3,label='Stokes V WLA erreur both', color='darkblue')
+ax2 = plt.subplot(1,1,1)
+ax2.plot(V,Wla_without_lande,label='Stokes V WLA without Lande',color='forestgreen')
+ax2.plot(V,Wla_with_lande,label='Stokes V WLA with Lande', color='darkred')
 plt.xlabel('v(km/s)')
 plt.ylabel('I/Ic') 	
 plt.legend()
