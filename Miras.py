@@ -32,43 +32,44 @@ data = np.genfromtxt('Miras-stars-NeoNarval-V/UHer_2024-04-12-stokesI.ascii.sum'
 
 # #observed data
 wavelength = data[:,0]
-# intensity = data[:,1] - 1
-# sigma=data[:,2]
+intensity = data[:,1] - 1
+sigma=data[:,2]
 
-# i=[]
-
-# s=[]
-
-# for k in (range (len(wavelength))):
-# 	
-# 	if wavelength[k]> wo2a[0] and wavelength[k] < wo2a[1]:
-# 		i.append(np.nan) 
-# 		s.append(np.nan)
-# 	elif wavelength[k]> wo2b[0] and wavelength[k] < wo2b[1]:
-# 		i.append(np.nan) 
-# 		s.append(np.nan)
-
-# 	elif wavelength[k]> wH2oa[0] and wavelength[k] < wH2oa[1]:
-# 		i.append(np.nan)
-# 		s.append(np.nan)
-
-# 	elif wavelength[k]> wH2ob[0] and wavelength[k] < wH2ob[1]:
-# 		i.append(np.nan)
-# 		s.append(np.nan)
-
-# 	elif wavelength[k]> whugg[0] and wavelength[k] < whugg[1]:
-# 		i.append(np.nan)
-# 		s.append(np.nan)
-
-# 	else :
-# 		i.append(intensity[k]) 
-# 		s.append(sigma[k])
-
-
-
+#Velocity grid
 V=np.arange(Vmin,Vmax,Vsteps)
-# i=np.array(i)
-# s=np.array(s)
+
+#Array that will contain the filtered data (I and sigma)
+i=[]
+s=[]
+
+
+#filtration of data
+for k in (range (len(wavelength))):
+ 	
+ 	if wavelength[k]> wo2a[0] and wavelength[k] < wo2a[1]:
+		 i.append(np.nan) 
+		 s.append(np.nan)
+ 	elif wavelength[k]> wo2b[0] and wavelength[k] < wo2b[1]:
+		 i.append(np.nan) 
+		 s.append(np.nan)
+
+ 	elif wavelength[k]> wH2oa[0] and wavelength[k] < wH2oa[1]:
+		 i.append(np.nan)
+		 s.append(np.nan)
+
+ 	elif wavelength[k]> wH2ob[0] and wavelength[k] < wH2ob[1]:
+		 i.append(np.nan)
+		 s.append(np.nan)
+
+ 	elif wavelength[k]> whugg[0] and wavelength[k] < whugg[1]:
+		 i.append(np.nan)
+		 s.append(np.nan)
+
+ 	else :
+		 i.append(intensity[k]) 
+		 s.append(sigma[k])
+i=np.array(i)
+s=np.array(s)
 
 
 #get mask
@@ -81,41 +82,45 @@ lande=pickle['lande']
 Ismolec = pickle['is_molecule?']
 Weight_Z=pickle['weight_Zeeman']
 
-# Nintens=np.zeros((len(V),len(mask)))
-# Nintens2=np.zeros((len(V),len(mask)))
-# Ns=np.zeros((len(V),len(mask)))
-# Ns1=np.zeros((len(V),len(mask)))
 
-# for k in (range (len(mask))) :
-#  	wmin= mask[k]*Vmin/c + mask[k]
-#  	wmax= mask[k]*Vmax/c + mask[k]
-#  	iii=np.argwhere(np.logical_and(wavelength > wmin-0.2, wavelength < wmax+0.2))
-#  	w=wavelength[iii]
-#  	intens = i[iii]
-#  	sigm=s[iii]	
-#  	Vk = c*(w-mask[k])/mask[k]
-#  	try : 
-# 		f=interpolate.interp1d(np.squeeze(Vk), np.squeeze(intens))	 
-# 		g=interpolate.interp1d(np.squeeze(Vk), np.squeeze(sigm))	
-# 		
-# 		y = f(V)
-# 		z=g(V)
-# 		Nintens[:,k]=y
-# 		
-# 		Ns[:,k]=1/z
-#  	except : 
-# 		a = np.empty(len(V))
-# 		a[:]=np.nan
-# 		Nintens[:,k]=a
-# 		Ns[:,k]=a
 
-# Sommeintens = np.nanmean(Nintens,axis=1)
+#Array that will contain all data from the rays
+Nintens=np.zeros((len(V),len(mask)))
+Ns=np.zeros((len(V),len(mask)))
 
-# multkkk=Ns*Nintens
-# Sommekk=np.nansum(multkkk,axis=1)
-# sommekkk=np.nansum(Ns,axis=1)
+for k in (range (len(mask))) :
+	
+	#transform the volicity grid in wavelength
+ 	wmin= mask[k]*Vmin/c + mask[k]
+ 	wmax= mask[k]*Vmax/c + mask[k]
+ 	iii=np.argwhere(np.logical_and(wavelength > wmin-0.2, wavelength < wmax+0.2))
+ 	w=wavelength[iii]
+ 	intens = i[iii]
+ 	sigm=s[iii]	
+ 	Vk = c*(w-mask[k])/mask[k]
+ 	try : 
+		 #interpolation
+		 f=interpolate.interp1d(np.squeeze(Vk), np.squeeze(intens))	 
+		 g=interpolate.interp1d(np.squeeze(Vk), np.squeeze(sigm))	
+		
+		 y = f(V)
+		 z=g(V)
+		 Nintens[:,k]=y
+		
+		 Ns[:,k]=1/z
+ 	except : 
+		 #column of nan if interpolation doesn't work
+		 a = np.empty(len(V))
+		 a[:]=np.nan
+		 Nintens[:,k]=a
+		 Ns[:,k]=a
 
-# Wla = Sommekk/sommekkk
+#Equation of WLA
+multintens=Ns*Nintens
+SommeB=np.nansum(multintens,axis=1)
+sommeW=np.nansum(Ns,axis=1)
+
+Wla = SommeB/sommeW
 # ################### Q
 
 
@@ -136,25 +141,26 @@ wavelengthN= dataN[:,0]
 intensityN = dataN[:,1]
 sigmaN=dataN[:,2]
 
+#Array that will contain all data from the rays
 NN=np.zeros((len(V),len(mask)))
 NsN=np.zeros((len(V),len(mask)))
 
 NQ=np.zeros((len(V),len(mask)))
-NQ2=np.zeros((len(V),len(mask)))
-NQ3=np.zeros((len(V),len(mask)))
-Ns2=np.zeros((len(V),len(mask)))
-Ns3=np.zeros((len(V),len(mask)))
+NsQ=np.zeros((len(V),len(mask)))
 
-
+#Array that will contain the filtered data (V/N and sigma)
 iN=[]
 i2=[]
 
 s2=[]
 sN=[]
 
+
+
+#filtration of data
 for k in (range (len(wavelength2))):
 	
-	if wavelength[k]<6000:
+	if wavelength[k]<300:
 		i2.append(np.nan) 
 		s2.append(np.nan)
 		iN.append(np.nan) 
@@ -181,6 +187,7 @@ sN=np.array(sN)
 
 for k in (range (len(mask))) :
 	
+	#transform the volicity grid in wavelength
 	wmin= mask[k]*Vmin/c + mask[k]
 	wmax= mask[k]*Vmax/c + mask[k]
 	iii=np.argwhere(np.logical_and(wavelength > wmin-0.2, wavelength < wmax+0.2))
@@ -194,6 +201,7 @@ for k in (range (len(mask))) :
 	
 	Vk = c*(w-mask[k])/mask[k]
 	try : 
+		#interpolation
 		f=interpolate.interp1d(np.squeeze(Vk), np.squeeze(intens))	 
 		g=interpolate.interp1d(np.squeeze(Vk), np.squeeze(sigm))	
 		
@@ -206,89 +214,75 @@ for k in (range (len(mask))) :
 		zN=gN(V)
 		
 		NQ[:,k]=y
-		NQ2[:,k]=y
-		NQ3[:,k]=y
+
 		NN[:,k]=yN
 	
-		Ns2[:,k]=1/z
-		Ns3[:,k]=1/z
+		NsQ[:,k]=1/z #Take the opposite by defintion of the matrix
 		NsN[:,k]=1/zN
 	
 	
 	except : 
-		a = np.empty(len(V))
+		 
+		#column of nan if interpolation doesn't work
+		a = np.empty(len(V)) #Array of nan
 		a[:]=np.nan
 		NQ[:,k]=a
-		NQ2[:,k]=a
-		Ns2[:,k]=a
-		Ns3[:,k]=a
+		NsQ[:,k]=a
 		NN[:,k]=a
 		NsN[:,k]=a
 		
 	
-		
+	#Test if we know the lande of the ray (99 is unknown)
 	if lande[k]==99 :
-# 		NQ2[:,k]=a
+
 		
-		NQk = NQ[:,k]
-		Ns2k = Ns2[:,k]
-		NsNk=NsN[:,k]
-		
-		
-		NQpositif = copy(NQ[:,k])
-		NQnegatif = -copy(NQ[:,k])
+		#Take the data from the last ray 
+		NQpositif = copy(NQ[:,k]) #positive lande 
+		NQnegatif = -copy(NQ[:,k]) #negative lande
 		
 		NNpositif = copy(NN[:,k])
 		NNnegatif = -copy(NN[:,k])
-		
-		Ns2positif = Ns2k
-		Ns2negatif = Ns2k
-		
-		NsNpositif = NsNk
-		NsNnegatif = NsNk
-		
-	
-		NQ3[:,k]=NQpositif
-		
+
+		#Creation of a matrix with k column that contains all data at this index of the loop
 		NQtemp = NQ[:,0:k+1]
-		NQtemp[:,k]=NQpositif
-		Ns2temp = Ns2[:,0:k+1]
-		Ns2temp[:,k]=Ns2k
+		NQtemp[:,k]=NQpositif #put the positive value as the last column
+		NsQtemp = NsQ[:,0:k+1] #The sigma doesn't change
 		
 		NNtemp = NN[:,0:k+1]
-		NNtemp[:,k]=NNpositif
+		NNtemp[:,k]=NNpositif #put the positive value as the last column
 		NsNtemp = NsN[:,0:k+1]
-		NsNtemp[:,k]=NsNk
 		
-		mult=Ns2temp*NQtemp
+		#Equation of WLA 
+		mult=NsQtemp*NQtemp
 		Somme=np.nansum(mult,axis=1)
-		sommek=np.nansum(Ns2temp,axis=1)
+		sommek=np.nansum(NsQtemp,axis=1)
 		Wla2positif = Somme/sommek
-		Ipositif = integrale(V, Wla2positif)
+		Ipositif = integrale(V, Wla2positif) #integral between the max/min of the pseudo profile created until now
 		
+		#Same things for Stokes N
 		multN=NsNtemp*NNtemp
 		SommeN=np.nansum(multN,axis=1)
 		sommeNk=np.nansum(NsNtemp,axis=1)
 		WlaNpositif = SommeN/sommeNk
-		INpositif = integrale(V, WlaNpositif)
+		INpositif = integrale(V, WlaNpositif) 
 		
 		
 		NQnegatiftemp = copy(NQ[:,0:k+1])
-		NQnegatiftemp[:,k]=NQnegatif
-		Ns2temp = Ns2[:,0:k+1]
-		Ns2temp[:,k]=Ns2k	
+		NQnegatiftemp[:,k]=NQnegatif #put the negative value as the last column
+		NsQtemp = NsQ[:,0:k+1]
 		
 		NNnegatiftemp = copy(NN[:,0:k+1])
-		NNnegatiftemp[:,k]=NNnegatif
+		NNnegatiftemp[:,k]=NNnegatif #put the positive value as the last column
 		NsNtemp = NsN[:,0:k+1]
-		NsNtemp[:,k]=NsNk	
 		
-		mult=Ns2temp*NQnegatiftemp
+		#Equation of WLA 
+		mult=NsQtemp*NQnegatiftemp
 		Somme=np.nansum(mult,axis=1)
-		sommek=np.nansum(Ns2temp,axis=1)
+		sommek=np.nansum(NsQtemp,axis=1)
 		Wla2negatif = Somme/sommek
-		Inegatif = integrale(V, Wla2negatif)
+		Inegatif = integrale(V, Wla2negatif) #integral between the max/min of the pseudo profile created until now
 		
+		#Same things for Stokes N
 		multN=NsNtemp*NNnegatiftemp
 		SommeN=np.nansum(multN,axis=1)
 		sommeNk=np.nansum(NsNtemp,axis=1)
@@ -296,69 +290,46 @@ for k in (range (len(mask))) :
 		INnegatif = integrale(V, WlaNnegatif)
 	
 		
+		#Test to take the maximum value of the integral between lande +1 or -1
 		if Ipositif < Inegatif : 
 			NQ[:,k]=NQnegatif
-			Ns2[:,k]=Ns2negatif
 			lande[k] = -1
 		else : 
 			NQ[:,k]=NQpositif
-			Ns2[:,k]=Ns2positif
 			lande[k]=1
 			
 		if INpositif < INnegatif : 
 			NN[:,k]=NNnegatif
-			NsN[:,k]=NsNnegatif
 		else : 
 			NN[:,k]=NNpositif
-			NsN[:,k]=NsNpositif
 	else : 
 		
-		NQ[:,k] = NQ[:,k]*1
-		NN[:,k] = NN[:,k]*1
-
-Sommelande = np.sum(lande)
-
-Somme2 = np.nanmean(NQ2,axis=1)
-mult3=Ns3*NQ2
-Somme3=np.nansum(mult3,axis=1)
-sommek3=np.nansum(Ns3,axis=1)
-
-Wla_without_lande = Somme3/sommek3
+		NQ[:,k] = NQ[:,k]
+		NN[:,k] = NN[:,k]
 
 
-mult=Ns3*NQ
+
+
+#Equation of WLA for Stokes V after all the +1/-1
+mult=NsQ*NQ
 Somme=np.nansum(mult,axis=1)
-sommek=np.nansum(Ns3,axis=1)
+sommek=np.nansum(NsQ,axis=1)
 
 Wla_with_lande_plus_or_minus = Somme/(sommek)
 
-mult=Ns3*NQ3
-Somme=np.nansum(mult,axis=1)
-sommek=np.nansum(Ns3,axis=1)
-
-Wla_with_lande_plus1 = Somme/(sommek)
 
 
+#Equation of WLA for Stokes N after all the +1/-1
 multN=NsN*NN
 SommeN=np.nansum(multN,axis=1)
 sommekN=np.nansum(NsN,axis=1)
 
 Wla_with_N = SommeN/(sommekN)
 
-####### Barre d'erreurs
 
 
 
-
-
-# We=Ns2
-# Se=1/Ns2
-# erreur = np.sqrt(np.nansum(We*Se*Se,axis=1)/(np.nansum(We,axis=1)*np.shape(NQ)[1]))
-
-
-
-
-
+##############ALL PLOTS 
 
 
 # fig=plt.figure()
@@ -377,7 +348,6 @@ Wla_with_N = SommeN/(sommekN)
 ax2 = plt.subplot(1,1,1)
 ax2.plot(V,Wla_with_N-0.0012,'b',label='Stokes N WLA. Date : 2014-04-11')
 ax2.plot(V,Wla_with_lande_plus_or_minus+0.00025,'r',label='Stokes V WLA with Lande +1 or -1. Date : 2014-04-11')
-# ax2.plot(V,Wla_with_lande_plus1,'b--',label='Stokes V WLA with Lande +1')
 plt.xlabel('v(km/s)')
 plt.ylabel('V/Ic') 	
 plt.legend()
@@ -385,14 +355,6 @@ plt.title('Comparaison Stokes N et V')
 plt.grid(True)
 plt.show()
 
-# ax2=plt.subplot(1,1,1)
-# ax2.plot(V,Wla2,label='Stokes V WLA', color='darkred')
-# ax2.errorbar(V,Wla2,yerr=erreur,barsabove=True,ecolor="blue")
-
-# plt.xlabel('v(km/s)')
-# plt.ylabel('V/Ic') 
-# plt.legend()
-# plt.grid(True)
  	
 	
 	
