@@ -6,91 +6,172 @@ from scipy import interpolate
 import math
 from scipy import integrate
 from copy import copy
+from scipy.ndimage import uniform_filter1d
+from scipy.optimize import least_squares
 
 # constant
 Vmax = 200
 Vmin = -200
-Vsteps = 6
-indice_max = 12
+Vsteps = 6 #Spectral resolution
+indice_min=32
+indice_max = 47
+#Telluric rays
 whugg=[3600,4000]
 wo2b = [6866,6950]
 wo2a= [7590,7724]
 wH2oa=[8950,9860]
 wH2ob=[8100,8300]
-c = c/1000
 
-def integrale(V,raie):
-	Ntemp = np.abs(raie)
-	isole = Ntemp[25:34]
-	I1 = integrate.simpson(isole,dx=Vsteps)
-	return(I1)
+c = c/1000# Speed of light in km/s
 
 
+#Function that I will minimize 
+def integrale(param_libre0,V,NV,NsV,param,Indice,NN,NsN):
+	
 
-# #get data from ascii
-data = np.genfromtxt('Miras-stars-NeoNarval-V/UHer_2024-04-12-stokesI.ascii.sum')
+
+	param=np.array(param)
+	param_libre=np.array(param_libre0)
+	
+	
+	#put the free parameters in the right place in the array of lande factor
+	for k in range (len(Indice)) : 
+		param[int(Indice[k])] = param_libre[k]
+	
+	
+	#normalisation by the sum of the unknown lande factor
+	normal = np.sum(np.abs(param))
+	
+	#Equation of WLA
+	Nv2=NV*param 
+	mult=NsV*Nv2
+	Somme=np.nansum(mult,axis=1)
+	sommek=np.nansum(NsV,axis=1)
+	raie = Somme/(sommek)
+	
+	#put the mean at 0
+	offset=np.mean(raie)
+	raie_offset = raie-offset
+	
+	#Frequency phase to smooth up the signal
+	fft=np.fft.fft(raie_offset)
+	fft=np.fft.fftshift(fft)
+	fft[0:27] = (0+0j)
+	fft[38:] = (0+0j)
+	fft=np.fft.ifftshift(fft)
+	ifft=np.fft.ifft(fft)
+
+	#Integration between the index corresponding of max Stokes I
+	isole = ifft[indice_min:indice_max]
+	isole = np.abs(isole)#Absolute value because Stokes V is symetrical
+
+	IV = np.nansum(isole/normal)
+	
+	
+	#Repeat all the operations for Stokes N
+	NN2=NN*param 
+	multN=NsN*NN2
+	SommeN=np.nansum(multN,axis=1)
+	sommekN=np.nansum(NsN,axis=1)
+	raieN = SommeN/(sommekN)
+	
+	offset=np.mean(raie)	
+	raieN_offset = raieN-offset
+
+
+	
+	fftN=np.fft.fft(raieN_offset)
+	fftN=np.fft.fftshift(fftN)
+	fftN[0:27] = (-0-0j)
+	fftN[38:] = (-0-0j)
+	fftN=np.fft.ifftshift(fftN)
+	ifftN=np.fft.ifft(fftN)
+
+	isoleN = ifftN[indice_min:indice_max]
+	isoleN=np.abs(isoleN)
+	
+	IN = np.nansum(isoleN/normal)
+	
+
+
+
+	if np.isnan(IV) or np.isnan(IN) : #Make sure the result is not NaN because it will cause an error in least square
+		return(10000*(IN+1/IV))
+	else :
+		return(10*IN+1/IV)
+#Return the integral of Stokes N and the inverse of 
+# the integral of Stokes V because I want to minimize Stokes N 
+# and maximize Stokes V
+
+
+
+
+
+#Velocity grid
+V=np.arange(Vmin,Vmax,Vsteps)
+
+# # #get data from ascii
+data = np.genfromtxt('UMon-Feb2021-NeoNarval-V/UMon_2021-02-14-stokesI.ascii')
 
 # #observed data
 wavelength = data[:,0]
 intensity = data[:,1] - 1
 sigma=data[:,2]
 
-#Velocity grid
-V=np.arange(Vmin,Vmax,Vsteps)
 
-#Array that will contain the filtered data (I and sigma)
+# #Array that will contain the filtered data (I and sigma)
 i=[]
 s=[]
 
 
-#filtration of data
+# #filtration of data
 for k in (range (len(wavelength))):
  	
  	if wavelength[k]> wo2a[0] and wavelength[k] < wo2a[1]:
-		 i.append(np.nan) 
-		 s.append(np.nan)
+ 		 i.append(np.nan) 
+ 		 s.append(np.nan)
  	elif wavelength[k]> wo2b[0] and wavelength[k] < wo2b[1]:
-		 i.append(np.nan) 
-		 s.append(np.nan)
+ 		 i.append(np.nan) 
+ 		 s.append(np.nan)
 
  	elif wavelength[k]> wH2oa[0] and wavelength[k] < wH2oa[1]:
-		 i.append(np.nan)
-		 s.append(np.nan)
+ 		 i.append(np.nan)
+ 		 s.append(np.nan)
 
  	elif wavelength[k]> wH2ob[0] and wavelength[k] < wH2ob[1]:
-		 i.append(np.nan)
-		 s.append(np.nan)
+ 		 i.append(np.nan)
+ 		 s.append(np.nan)
 
  	elif wavelength[k]> whugg[0] and wavelength[k] < whugg[1]:
-		 i.append(np.nan)
-		 s.append(np.nan)
+ 		 i.append(np.nan)
+ 		 s.append(np.nan)
 
  	else :
-		 i.append(intensity[k]) 
-		 s.append(sigma[k])
+ 		 i.append(intensity[k]) 
+ 		 s.append(sigma[k])
 i=np.array(i)
 s=np.array(s)
 
 
 #get mask
-pickle = pickle.load(open('t3000g+3.0.sel_atmo+mol.pickle', 'rb'))
+pick = pickle.load(open('t5000g+3.0.sel_atmo+mol.pickle', 'rb'))
 
-mask = pickle['wave_vac']
-poids = pickle['depth']
-weightI=pickle['weight_I']
-lande=pickle['lande']
-Ismolec = pickle['is_molecule?']
-Weight_Z=pickle['weight_Zeeman']
+mask = pick['wave_vac'] #wavelength of all the rays
+poids = pick['depth']
+weightI=pick['weight_I']
+lande=pick['lande'] #lande factor
+Ismolec = pick['is_molecule?'] #if the ray is molecular or not
+Weight_Z=pick['weight_Zeeman']
 
 
 
-#Array that will contain all data from the rays
+# #Array that will contain all data from the rays
 Nintens=np.zeros((len(V),len(mask)))
 Ns=np.zeros((len(V),len(mask)))
 
 for k in (range (len(mask))) :
-	
-	#transform the volicity grid in wavelength
+ 	
+ 	#transform the volicity grid in wavelength
  	wmin= mask[k]*Vmin/c + mask[k]
  	wmax= mask[k]*Vmax/c + mask[k]
  	iii=np.argwhere(np.logical_and(wavelength > wmin-0.2, wavelength < wmax+0.2))
@@ -99,43 +180,43 @@ for k in (range (len(mask))) :
  	sigm=s[iii]	
  	Vk = c*(w-mask[k])/mask[k]
  	try : 
-		 #interpolation
-		 f=interpolate.interp1d(np.squeeze(Vk), np.squeeze(intens))	 
-		 g=interpolate.interp1d(np.squeeze(Vk), np.squeeze(sigm))	
+ 		 #interpolation
+ 		 f=interpolate.interp1d(np.squeeze(Vk), np.squeeze(intens))	 
+ 		 g=interpolate.interp1d(np.squeeze(Vk), np.squeeze(sigm))	
 		
-		 y = f(V)
-		 z=g(V)
-		 Nintens[:,k]=y
+ 		 y = f(V)
+ 		 z=g(V)
+ 		 Nintens[:,k]=y
 		
-		 Ns[:,k]=1/z
+ 		 Ns[:,k]=1/z
  	except : 
-		 #column of nan if interpolation doesn't work
-		 a = np.empty(len(V))
-		 a[:]=np.nan
-		 Nintens[:,k]=a
-		 Ns[:,k]=a
+ 		 #column of nan if interpolation doesn't work
+ 		 a = np.empty(len(V))
+ 		 a[:]=np.nan
+ 		 Nintens[:,k]=a
+ 		 Ns[:,k]=a
 
 #Equation of WLA
 multintens=Ns*Nintens
 SommeB=np.nansum(multintens,axis=1)
 sommeW=np.nansum(Ns,axis=1)
 
-Wla = SommeB/sommeW
-# ################### Q
+WlaI = SommeB/sommeW
+# ################### V
 
 
 
 
 
 #get data from ascii
-data2 = np.genfromtxt('Miras-stars-NeoNarval-V/UHer_2024-04-12-stokesV.ascii.sum')
-dataN = np.genfromtxt('Miras-stars-NeoNarval-V/UHer_2024-04-12-stokesN.ascii.sum')
+dataV = np.genfromtxt('UMon-Feb2021-NeoNarval-V/UMon_2021-02-14-stokesV.ascii')
+dataN = np.genfromtxt('UMon-Feb2021-NeoNarval-V/UMon_2021-02-14-stokesN.ascii')
 
 
 #observed data
-wavelength2= data2[:,0]
-intensity2 = data2[:,1]
-sigma2=data2[:,2]
+wavelength2= dataV[:,0]
+intensity2 = dataV[:,1]
+sigma2=dataV[:,2]
 
 wavelengthN= dataN[:,0]
 intensityN = dataN[:,1]
@@ -145,14 +226,17 @@ sigmaN=dataN[:,2]
 NN=np.zeros((len(V),len(mask)))
 NsN=np.zeros((len(V),len(mask)))
 
-NQ=np.zeros((len(V),len(mask)))
-NsQ=np.zeros((len(V),len(mask)))
+NV=np.zeros((len(V),len(mask)))
+NsV=np.zeros((len(V),len(mask)))
+
+lande0=np.zeros((len(V),len(mask)))
+
 
 #Array that will contain the filtered data (V/N and sigma)
 iN=[]
-i2=[]
+iV=[]
 
-s2=[]
+sV=[]
 sN=[]
 
 
@@ -160,29 +244,30 @@ sN=[]
 #filtration of data
 for k in (range (len(wavelength2))):
 	
-	if wavelength[k]<300:
-		i2.append(np.nan) 
-		s2.append(np.nan)
+	if wavelengthN[k]<300:
+		iV.append(np.nan) 
+		sV.append(np.nan)
 		iN.append(np.nan) 
 		sN.append(np.nan)
-	elif wavelength[k]>12000:
-		i2.append(np.nan) 
-		s2.append(np.nan)
+	elif wavelengthN[k]>12000:
+		iV.append(np.nan) 
+		sV.append(np.nan)
 		iN.append(np.nan) 
 		sN.append(np.nan)
 
 	else :
-		i2.append(intensity2[k]) 
-		s2.append(sigma2[k])
+		iV.append(intensity2[k]) 
+		sV.append(sigma2[k])
 		iN.append(intensityN[k]) 
 		sN.append(sigmaN[k])
 		
-i2=np.array(i2)
-s2=np.array(s2)
+iV=np.array(iV)
+sV=np.array(sV)
 iN=np.array(iN)
 sN=np.array(sN)
 
 
+		
 
 
 for k in (range (len(mask))) :
@@ -190,10 +275,10 @@ for k in (range (len(mask))) :
 	#transform the volicity grid in wavelength
 	wmin= mask[k]*Vmin/c + mask[k]
 	wmax= mask[k]*Vmax/c + mask[k]
-	iii=np.argwhere(np.logical_and(wavelength > wmin-0.2, wavelength < wmax+0.2))
+	iii=np.argwhere(np.logical_and(wavelengthN > wmin-0.2, wavelengthN < wmax+0.2))
 	w=wavelength2[iii]
-	intens = i2[iii]
-	sigm=s2[iii]	
+	intens = iV[iii]
+	sigm=sV[iii]	
 	
 	wN=wavelengthN[iii]
 	intensN= iN[iii]
@@ -213,11 +298,11 @@ for k in (range (len(mask))) :
 		yN = fN(V)
 		zN=gN(V)
 		
-		NQ[:,k]=y
+		NV[:,k]=y
 
 		NN[:,k]=yN
 	
-		NsQ[:,k]=1/z #Take the opposite by defintion of the matrix
+		NsV[:,k]=1/z #Take the opposite by defintion of the matrix
 		NsN[:,k]=1/zN
 	
 	
@@ -226,183 +311,125 @@ for k in (range (len(mask))) :
 		#column of nan if interpolation doesn't work
 		a = np.empty(len(V)) #Array of nan
 		a[:]=np.nan
-		NQ[:,k]=a
-		NsQ[:,k]=a
+		NV[:,k]=a
+		NsV[:,k]=a
 		NN[:,k]=a
 		NsN[:,k]=a
-		
-	
-	#Test if we know the lande of the ray (99 is unknown)
-	if lande[k]==99 :
-
-		
-		#Take the data from the last ray 
-		NQpositif = copy(NQ[:,k]) #positive lande 
-		NQnegatif = -copy(NQ[:,k]) #negative lande
-		
-		NNpositif = copy(NN[:,k])
-		NNnegatif = -copy(NN[:,k])
-
-		#Creation of a matrix with k column that contains all data at this index of the loop
-		NQtemp = NQ[:,0:k+1]
-		NQtemp[:,k]=NQpositif #put the positive value as the last column
-		NsQtemp = NsQ[:,0:k+1] #The sigma doesn't change
-		
-		NNtemp = NN[:,0:k+1]
-		NNtemp[:,k]=NNpositif #put the positive value as the last column
-		NsNtemp = NsN[:,0:k+1]
-		
-		#Equation of WLA 
-		mult=NsQtemp*NQtemp
-		Somme=np.nansum(mult,axis=1)
-		sommek=np.nansum(NsQtemp,axis=1)
-		Wla2positif = Somme/sommek
-		Ipositif = integrale(V, Wla2positif) #integral between the max/min of the pseudo profile created until now
-		
-		#Same things for Stokes N
-		multN=NsNtemp*NNtemp
-		SommeN=np.nansum(multN,axis=1)
-		sommeNk=np.nansum(NsNtemp,axis=1)
-		WlaNpositif = SommeN/sommeNk
-		INpositif = integrale(V, WlaNpositif) 
-		
-		
-		NQnegatiftemp = copy(NQ[:,0:k+1])
-		NQnegatiftemp[:,k]=NQnegatif #put the negative value as the last column
-		NsQtemp = NsQ[:,0:k+1]
-		
-		NNnegatiftemp = copy(NN[:,0:k+1])
-		NNnegatiftemp[:,k]=NNnegatif #put the positive value as the last column
-		NsNtemp = NsN[:,0:k+1]
-		
-		#Equation of WLA 
-		mult=NsQtemp*NQnegatiftemp
-		Somme=np.nansum(mult,axis=1)
-		sommek=np.nansum(NsQtemp,axis=1)
-		Wla2negatif = Somme/sommek
-		Inegatif = integrale(V, Wla2negatif) #integral between the max/min of the pseudo profile created until now
-		
-		#Same things for Stokes N
-		multN=NsNtemp*NNnegatiftemp
-		SommeN=np.nansum(multN,axis=1)
-		sommeNk=np.nansum(NsNtemp,axis=1)
-		WlaNnegatif = SommeN/sommeNk
-		INnegatif = integrale(V, WlaNnegatif)
 	
 		
-		#Test to take the maximum value of the integral between lande +1 or -1
-		if Ipositif < Inegatif : 
-			NQ[:,k]=NQnegatif
-			lande[k] = -1
-		else : 
-			NQ[:,k]=NQpositif
-			lande[k]=1
-			
-		if INpositif < INnegatif : 
-			NN[:,k]=NNnegatif
-		else : 
-			NN[:,k]=NNpositif
-	else : 
-		
-		NQ[:,k] = NQ[:,k]
-		NN[:,k] = NN[:,k]
+
+#building the vector of known and unknown lande factor
+Inconnue = len(np.argwhere(lande==99))/1 ##value of 1/5 of the unknown lande factor because there is too many free parameters for Least Square
+param = np.zeros(len(mask)) #vector of all lande factor
+j=0
+
+bounds = np.ones(int(Inconnue)) #lande factor are limited from -1 to +1
+
+
+for n in range (1) : #I will do the least square 5 times to determine all unknown lande factor
+	
+
+	param_librek = np.zeros(int(Inconnue))#vector of unknown lande factor
+	Indicek = np.zeros(int(Inconnue))#index at which I find the unknown lande factor in the mask
+	j= 0
+
+	
+	for k in range (len(mask)) :
+		if lande[k] ==99 : #if the lande factor is unknown
+			if j < Inconnue - 1: #until the limit of 1/5 of unknown lande factor
+				param_librek[j]=1 #initialisation 
+				Indicek[j]=k
+				j+=1
+				
+			else : 
+				param[k]=0
+		else :
+				
+			param[k] = lande [k]
+
+	
+	#Using least square to maximize the signal between the index choosen by adjusting the uknown lande factor
+	res = least_squares(integrale, param_librek, args=(V,NV,NsV,param,Indicek,NN,NsN),bounds = (-2*bounds,2*bounds),verbose=2)
+	
+	#results of the unknown Lande factor
+	param_LS = res.x	
+	
+	#Put the new Lande factor in the right place
+	for m in range (len(param_LS)) : 
+		param[int(Indicek[m])] = param_LS[m]
+		lande[int(Indicek[m])] = param_LS[m]
 
 
 
 
-#Equation of WLA for Stokes V after all the +1/-1
-mult=NsQ*NQ
-Somme=np.nansum(mult,axis=1)
-sommek=np.nansum(NsQ,axis=1)
+lande_fin=param
 
-Wla_with_lande_plus_or_minus = Somme/(sommek)
+#normalization
+normal = np.sum(np.abs(lande_fin))
+
+#Equation of WLA for Stokes V
+
+NV_fin = NV*lande_fin #multiplication of the rays by their lande factor
+
+#Equation of WLA for Stokes V
+mult_LS=NsV*NV_fin
+Somme_LS=np.nansum(mult_LS,axis=1)
+sommek_LS=np.nansum(NsV,axis=1)
+WLA_LS = Somme_LS/(sommek_LS*normal)
+
+#Repeat operations for Stokes N
+NN_fin = NN*lande_fin
+
+multN_LS=NsN*NN_fin
+SommeN_LS=np.nansum(multN_LS,axis=1)
+sommekN_LS=np.nansum(NsN,axis=1)
+WLAN_LS = SommeN_LS/(sommekN_LS*normal)
 
 
 
-#Equation of WLA for Stokes N after all the +1/-1
-multN=NsN*NN
-SommeN=np.nansum(multN,axis=1)
-sommekN=np.nansum(NsN,axis=1)
-
-Wla_with_N = SommeN/(sommekN)
-
-
+#Keep all data in a pickle 
+Data = {}
+Data ["Velocity"] = V
+Data ["StokesI"] = WlaI
+Data ["StokesV"] = WLA_LS
+Data ["StokesN"] = WLAN_LS
+Data ["Lande"] = param
+with open('data/UMon_2021-02-14-2.ascii.pickle','wb') as f:
+    pickle.dump(Data, f)
 
 
 ##############ALL PLOTS 
 
-
-# fig=plt.figure()
-
-# ax1 = plt.subplot(1,1,1)
-# # ax1.plot(V,Sommeintens+1.1,label='Stokes I SLA',color='forestgreen')
-# ax1.plot(V,Wla+1.05,label='Stokes I WLA', color='darkred')
-# plt.xlabel('v(km/s)')
-# plt.ylabel('I/Ic') 	
-# plt.legend()
-# plt.grid(True)
+#Stokes I
+ax2 = plt.subplot(3,1,1)
+ax2.plot(V,WlaI+1.295,label='Stokes I WLA', color='darkred')
+plt.title('Stokes I')
+plt.xlabel('v(km/s)')
+plt.ylabel('I/Ic') 	
+plt.legend()
+plt.grid(True)
 
 
 
-
-ax2 = plt.subplot(1,1,1)
-ax2.plot(V,Wla_with_N-0.0012,'b',label='Stokes N WLA. Date : 2014-04-11')
-ax2.plot(V,Wla_with_lande_plus_or_minus+0.00025,'r',label='Stokes V WLA with Lande +1 or -1. Date : 2014-04-11')
+#Stokes V
+ax2 = plt.subplot(3,1,2)
+ax2.plot(V,WLAN_LS,'b',label='Stokes N UMon_2021-02-14')
+ax2.plot(V,WLA_LS,'r',label='Stokes V UMon_2021-02-14')
 plt.xlabel('v(km/s)')
 plt.ylabel('V/Ic') 	
+plt.vlines(V[indice_min], np.min(WLA_LS),np.max(WLA_LS),linestyles='--',color='green')
+plt.vlines(V[indice_max], np.min(WLA_LS),np.max(WLA_LS),linestyles='--',color='green')
 plt.legend()
 plt.title('Comparaison Stokes N et V')
 plt.grid(True)
 plt.show()
 
- 	
-	
-	
 
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
+#lande factor
+ax2 = plt.subplot(3,1,3)
+ax2.hist(param, bins=500)
+plt.title('Histogram of all Lande factor')
+
+
+
 	
